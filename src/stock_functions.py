@@ -52,43 +52,23 @@ def get_best_performers(days=30):
     return pd.DataFrame(performance).sort_values('Returns', ascending=False)
 
 def predict_stock_price(df, days_to_predict=30):
-    """Predict future stock prices using LSTM"""
-    data = df['Close'].values.reshape(-1, 1)
-    scaler = MinMaxScaler()
-    data_scaled = scaler.fit_transform(data)
+    """Simple prediction using moving average"""
+    last_price = df['Close'].iloc[-1]
+    ma20 = df['Close'].rolling(window=20).mean().iloc[-1]
+    ma50 = df['Close'].rolling(window=50).mean().iloc[-1]
     
-    # Prepare sequences for LSTM
-    sequence_length = 60
-    sequences = []
-    target = []
-    
-    for i in range(len(data_scaled) - sequence_length):
-        sequences.append(data_scaled[i:i+sequence_length])
-        target.append(data_scaled[i+sequence_length])
-    
-    X = np.array(sequences)
-    y = np.array(target)
-    
-    # Create and train LSTM model
-    model = Sequential([
-        LSTM(50, activation='relu', input_shape=(sequence_length, 1), return_sequences=True),
-        LSTM(50, activation='relu'),
-        Dense(1)
-    ])
-    
-    model.compile(optimizer='adam', loss='mse')
-    model.fit(X, y, epochs=50, batch_size=32, verbose=0)
-    
-    # Make predictions
-    last_sequence = data_scaled[-sequence_length:]
-    future_predictions = []
+    # Simple trend-based prediction
+    trend = (ma20 - ma50) / ma50
+    predictions = []
+    current_price = last_price
     
     for _ in range(days_to_predict):
-        next_pred = model.predict(last_sequence.reshape(1, sequence_length, 1), verbose=0)
-        future_predictions.append(next_pred[0, 0])
-        last_sequence = np.append(last_sequence[1:], next_pred)
+        next_price = current_price * (1 + trend)
+        predictions.append(next_price)
+        current_price = next_price
     
-    return scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
+    return np.array(predictions).reshape(-1, 1)
+
 
 def get_stock_news(ticker):
     """Get latest news about the stock"""

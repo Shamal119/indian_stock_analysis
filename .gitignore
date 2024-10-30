@@ -1,0 +1,15 @@
+Python
+    pycache/
+    *.py[cod]
+    *$py.class
+    Environment
+    venv/
+    env/
+    .env
+    IDE
+    .vscode/
+    .idea/
+    Misc
+    .DS_Store
+    node_modules/
+    *.log

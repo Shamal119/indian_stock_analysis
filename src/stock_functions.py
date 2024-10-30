@@ -4,8 +4,6 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
 import requests
 from bs4 import BeautifulSoup
 import warnings

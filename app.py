@@ -32,7 +32,12 @@ if analysis_type == "Market Overview":
         if df is not None:
             fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name=symbol))
     
-    fig.update_layout(title="Top 5 Performers Price Movement")
+    fig.update_layout(
+        title="Top 5 Performers Price Movement",
+        xaxis_title="Date",
+        yaxis_title="Price (INR)",
+        template='plotly_dark'
+    )
     st.plotly_chart(fig)
 
 else:
@@ -44,18 +49,18 @@ else:
     
     df = get_stock_data(ticker, start_date, end_date)
         
-    if df is not None:
+    if df is not None and len(df) > 1:
         # Current Stats
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Current Price", f"₹{df['Close'][-1]:.2f}")
+            st.metric("Current Price", f"₹{df['Close'].iloc[-1]:.2f}")
         with col2:
-            price_change = df['Close'][-1] - df['Close'][-2]
+            price_change = df['Close'].iloc[-1] - df['Close'].iloc[-2]
             st.metric("Price Change", f"₹{price_change:.2f}")
         with col3:
-            st.metric("Volume", f"{df['Volume'][-1]:,.0f}")
+            st.metric("Volume", f"{df['Volume'].iloc[-1]:,.0f}")
         with col4:
-            st.metric("Volatility", f"{df['Volatility'][-1]:.2%}")
+            st.metric("Volatility", f"{df['Volatility'].iloc[-1]:.2%}")
 
         # Technical Analysis Chart
         st.plotly_chart(create_analysis_chart(df), use_container_width=True)

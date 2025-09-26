@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, date
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
@@ -145,10 +146,15 @@ def get_stock_news(ticker):
         return pd.DataFrame()
 
 def create_analysis_chart(df):
-    """Create comprehensive analysis chart"""
-    fig = go.Figure()
-    
-    # Candlestick chart
+    """Create comprehensive analysis chart with subplots for price and volume."""
+    fig = make_subplots(
+        rows=2, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.7, 0.3]
+    )
+
+    # Candlestick chart for price
     fig.add_trace(go.Candlestick(
         x=df.index,
         open=df['Open'],
@@ -156,9 +162,9 @@ def create_analysis_chart(df):
         low=df['Low'],
         close=df['Close'],
         name='Price'
-    ))
-    
-    # Add Moving Averages
+    ), row=1, col=1)
+
+    # Add Moving Averages to the price chart
     for window in [20, 50, 200]:
         ma = df['Close'].rolling(window=window).mean()
         fig.add_trace(go.Scatter(
@@ -166,25 +172,24 @@ def create_analysis_chart(df):
             y=ma,
             name=f'{window}-day MA',
             line=dict(width=1)
-        ))
-    
-    # Add volume bars
+        ), row=1, col=1)
+
+    # Volume bars on the second subplot
     fig.add_trace(go.Bar(
         x=df.index,
         y=df['Volume'],
         name='Volume',
-        yaxis='y2'
-    ))
-    
+        marker_color='rgba(100, 120, 255, 0.6)'
+    ), row=2, col=1)
+
     fig.update_layout(
         title='Stock Analysis',
         yaxis_title='Price (INR)',
-        yaxis2=dict(
-            title='Volume',
-            overlaying='y',
-            side='right'
-        ),
-        template='plotly_dark'
+        xaxis2_title='Date',
+        yaxis2_title='Volume',
+        template='plotly_dark',
+        showlegend=True,
+        xaxis_rangeslider_visible=False
     )
     
     return fig

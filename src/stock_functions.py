@@ -1,260 +1,140 @@
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-import requests
-from bs4 import BeautifulSoup
-import warnings
-
+from datetime import datetime, timedelta, date
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
-
+import warnings
 
 warnings.filterwarnings('ignore')
 
+@st.cache_data
 def get_nifty50_symbols():
     """Get list of current Nifty 50 stocks"""
+    # In a real-world scenario, this list should be fetched dynamically
+    # from a reliable source, as the Nifty 50 constituents can change.
     symbols = [
-        'ADANIPORTS.NS',  # Adani Ports
-        'ASIANPAINT.NS',  # Asian Paints
-        'AXISBANK.NS',    # Axis Bank
-        'BAJFINANCE.NS',  # Bajaj Finance
-        'BAJAJFINSV.NS',  # Bajaj Finserv
-        'BHARTIARTL.NS',  # Bharti Airtel
-        'BRITANNIA.NS',   # Britannia Industries
-        'CIPLA.NS',       # Cipla
-        'COALINDIA.NS',   # Coal India
-        'DIVISLAB.NS',    # Divi's Laboratories
-        'DRREDDY.NS',     # Dr. Reddy's Laboratories
-        'EICHERMOT.NS',   # Eicher Motors
-        'GRASIM.NS',      # Grasim Industries
-        'HCLTECH.NS',     # HCL Technologies
-        'HDFCBANK.NS',    # HDFC Bank
-        'HDFC.NS',        # HDFC
-        'HEROMOTOCO.NS',  # Hero MotoCorp
-        'HINDALCO.NS',    # Hindalco Industries
-        'HINDUNILVR.NS',  # Hindustan Unilever
-        'ICICIBANK.NS',   # ICICI Bank
-        'INDUSINDBK.NS',  # IndusInd Bank
-        'INFY.NS',        # Infosys
-        'ITC.NS',         # ITC
-        'JSWSTEEL.NS',    # JSW Steel
-        'KOTAKBANK.NS',   # Kotak Mahindra Bank
-        'LT.NS',          # Larsen & Toubro
-        'M&M.NS',         # Mahindra & Mahindra
-        'MARUTI.NS',      # Maruti Suzuki
-        'NESTLEIND.NS',   # Nestlé India
-        'NTPC.NS',        # NTPC
-        'ONGC.NS',        # ONGC
-        'POWERGRID.NS',   # Power Grid Corporation of India
-        'RELIANCE.NS',    # Reliance Industries
-        'SBIN.NS',        # State Bank of India
-        'SUNPHARMA.NS',   # Sun Pharmaceutical
-        'TATAMOTORS.NS',  # Tata Motors
-        'TATASTEEL.NS',   # Tata Steel
-        'TECHM.NS',       # Tech Mahindra
-        'TITAN.NS',       # Titan Company
-        'ULTRACEMCO.NS',  # UltraTech Cement
-        'UPL.NS',         # UPL
-        'WIPRO.NS'        # Wipro
+        'ADANIPORTS.NS', 'ASIANPAINT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'BAJAJFINSV.NS',
+        'BHARTIARTL.NS', 'BRITANNIA.NS', 'CIPLA.NS', 'COALINDIA.NS', 'DIVISLAB.NS',
+        'DRREDDY.NS', 'EICHERMOT.NS', 'GRASIM.NS', 'HCLTECH.NS', 'HDFCBANK.NS', 'HDFC.NS',
+        'HEROMOTOCO.NS', 'HINDALCO.NS', 'HINDUNILVR.NS', 'ICICIBANK.NS', 'INDUSINDBK.NS',
+        'INFY.NS', 'ITC.NS', 'JSWSTEEL.NS', 'KOTAKBANK.NS', 'LT.NS', 'M&M.NS', 'MARUTI.NS',
+        'NESTLEIND.NS', 'NTPC.NS', 'ONGC.NS', 'POWERGRID.NS', 'RELIANCE.NS', 'SBIN.NS',
+        'SUNPHARMA.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS', 'TECHM.NS', 'TITAN.NS',
+        'ULTRACEMCO.NS', 'UPL.NS', 'WIPRO.NS'
     ]
     return symbols
 
+@st.cache_data
 def get_stock_data(ticker, start_date, end_date):
     """Get stock data with error handling"""
     try:
-        stock = yf.Ticker(ticker)
-        df = stock.history(start=start_date, end=end_date)
-
+        df = yf.download(ticker, start=start_date, end=end_date, progress=False)
         if df.empty:
             print(f"Failed to get data for {ticker}: No data available.")
             return None
-        
         df['Returns'] = df['Close'].pct_change()
         df['Volatility'] = df['Returns'].rolling(window=20).std() * np.sqrt(252)
         return df
-
     except Exception as e:
         print(f"Error fetching data for {ticker}: {e}")
         return None
 
-
+@st.cache_data
 def get_best_performers(days=30):
-    """Get best performing stocks in the last n days"""
+    """Get best performing stocks in the last n days using a single batch download."""
     symbols = get_nifty50_symbols()
-    end_date = datetime.now()
+    end_date = date.today()
     start_date = end_date - timedelta(days=days)
     
+    # Fetch all data in a single batch request
+    try:
+        data = yf.download(symbols, start=start_date, end=end_date, group_by='ticker', progress=False)
+        if data.empty:
+            return pd.DataFrame(columns=['Symbol', 'Returns', 'Current_Price', 'Volume'])
+    except Exception as e:
+        print(f"Error during batch download: {e}")
+        return pd.DataFrame(columns=['Symbol', 'Returns', 'Current_Price', 'Volume'])
+
     performance = []
-    
     for symbol in symbols:
-        df = get_stock_data(symbol, start_date, end_date)
-        
-        if df is not None and not df.empty and 'Close' in df.columns:
+        df = data[symbol]
+        df = df.dropna(subset=['Close']) # Ensure 'Close' prices are available
+        if not df.empty:
             try:
-                returns = ((df['Close'].iloc[-1] / df['Close'].iloc[0]) - 1) * 100
+                start_price = df['Close'].iloc[0]
+                end_price = df['Close'].iloc[-1]
+                returns = ((end_price / start_price) - 1) * 100
                 performance.append({
                     'Symbol': symbol,
                     'Returns': returns,
-                    'Current_Price': df['Close'].iloc[-1],
-                    'Volume': df['Volume'].iloc[-1] if 'Volume' in df.columns else 0
+                    'Current_Price': end_price,
+                    'Volume': df['Volume'].iloc[-1]
                 })
+            except IndexError:
+                print(f"Not enough data for {symbol} to calculate performance.")
             except Exception as e:
                 print(f"Error processing {symbol}: {e}")
 
     if performance:
         return pd.DataFrame(performance).sort_values('Returns', ascending=False)
     else:
-        return pd.DataFrame(columns=['Symbol', 'Returns', 'Current_Price', 'Volume'])  # Return empty DF if no data
+        return pd.DataFrame(columns=['Symbol', 'Returns', 'Current_Price', 'Volume'])
 
-
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-
+@st.cache_data
 def predict_stock_price(df, days_to_predict=30, window_size=60):
     """
     Predict future stock prices using an LSTM model that incorporates additional factors.
     In addition to 'Close' prices, we include 'Volume' and 'Volatility' as input features.
-    
-    Parameters:
-        df (pd.DataFrame): Historical stock data containing at least the columns:
-                           'Close', 'Volume', and 'Volatility'.
-        days_to_predict (int): Number of future days to predict.
-        window_size (int): Number of past days to use as input.
-    
-    Returns:
-        np.array: Array of predicted prices (original scale) for the next `days_to_predict` days.
     """
-    # Ensure there's enough data
     if len(df) < window_size:
         raise ValueError("Not enough data to train the LSTM model. Increase the historical data range.")
     
-    # Select and clean the features
     features = ['Close', 'Volume', 'Volatility']
-    df_features = df[features].dropna()  # Remove rows with missing values
-    data = df_features.values  # Shape: (n_samples, 3)
+    df_features = df[features].dropna()
+    data = df_features.values
     
-    # Scale the features (all at once) using MinMaxScaler.
-    # Note: We use one scaler so we can later invert the prediction for 'Close'
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(data)
     
-    # Create training sequences
     X_train, y_train = [], []
     for i in range(window_size, len(scaled_data)):
-        # Each input sample is a sequence of vectors over the window_size period
         X_train.append(scaled_data[i-window_size:i])
-        # The target is the 'Close' price (first feature) at time i
         y_train.append(scaled_data[i, 0])
     X_train, y_train = np.array(X_train), np.array(y_train)
     
-    # Reshape X_train if necessary (it should be of shape: [samples, window_size, num_features])
-    # Build the LSTM model
-    model = Sequential()
-    model.add(LSTM(50, return_sequences=True, input_shape=(window_size, len(features))))
-    model.add(LSTM(50))
-    model.add(Dense(1))  # Output: predicted scaled 'Close' price
+    model = Sequential([
+        LSTM(50, return_sequences=True, input_shape=(window_size, len(features))),
+        LSTM(50),
+        Dense(1)
+    ])
     model.compile(optimizer='adam', loss='mean_squared_error')
-    
-    # Train the model
     model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
     
-    # Begin iterative forecasting
     predictions_scaled = []
-    # Start with the last window from the available data
     current_sequence = scaled_data[-window_size:].copy()
     
     for _ in range(days_to_predict):
-        # Reshape current sequence to (1, window_size, num_features)
         current_sequence_reshaped = np.reshape(current_sequence, (1, window_size, len(features)))
-        # Predict the next day's scaled 'Close' price
         next_pred_scaled = model.predict(current_sequence_reshaped, verbose=0)[0, 0]
         predictions_scaled.append(next_pred_scaled)
         
-        # Prepare the next input vector:
-        # For the additional features (Volume and Volatility), we'll assume they remain as in the last observed day.
-        last_observed = current_sequence[-1].copy()  # Contains [Close, Volume, Volatility]
+        last_observed = current_sequence[-1].copy()
         next_day = last_observed.copy()
-        next_day[0] = next_pred_scaled  # Update the 'Close' price with the prediction
+        next_day[0] = next_pred_scaled
         
-        # Slide the window: drop the first day and append the new predicted day
         current_sequence = np.append(current_sequence[1:], [next_day], axis=0)
     
-    # Inverse transform the scaled 'Close' predictions back to the original scale.
-    # Since 'Close' is the first feature, we use the corresponding min and range.
     close_min = scaler.data_min_[0]
     close_range = scaler.data_range_[0]
     predictions = np.array(predictions_scaled) * close_range + close_min
     
     return predictions
 
-
-# def predict_stock_price(df, days_to_predict=30, window_size=60):
-#     """
-#     Predict future stock prices using an LSTM model.
-    
-#     Parameters:
-#         df (pd.DataFrame): Historical stock data with a 'Close' column.
-#         days_to_predict (int): Number of future days to predict.
-#         window_size (int): Number of past days to use for each prediction input.
-        
-#     Returns:
-#         np.array: Array of predicted prices for the next `days_to_predict` days.
-#     """
-#     # Ensure there's enough data
-#     if len(df) < window_size:
-#         raise ValueError("Not enough data to train the LSTM model. Increase the historical data range.")
-    
-#     # Prepare the dataset using the 'Close' prices
-#     close_prices = df['Close'].values.reshape(-1, 1)
-    
-#     # Scale the data to the [0, 1] range
-#     scaler = MinMaxScaler(feature_range=(0, 1))
-#     scaled_data = scaler.fit_transform(close_prices)
-    
-#     # Create the training sequences
-#     X_train, y_train = [], []
-#     for i in range(window_size, len(scaled_data)):
-#         X_train.append(scaled_data[i - window_size:i, 0])
-#         y_train.append(scaled_data[i, 0])
-#     X_train, y_train = np.array(X_train), np.array(y_train)
-#     X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
-    
-#     # Build the LSTM model
-#     model = Sequential()
-#     model.add(LSTM(50, return_sequences=True, input_shape=(window_size, 1)))
-#     model.add(LSTM(50))
-#     model.add(Dense(1))
-#     model.compile(optimizer='adam', loss='mean_squared_error')
-    
-#     # Train the model (adjust epochs and batch_size as needed)
-#     model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
-    
-#     # Predict future prices using iterative forecasting
-#     predictions = []
-#     last_sequence = scaled_data[-window_size:]
-#     current_sequence = last_sequence.copy()
-    
-#     for _ in range(days_to_predict):
-#         current_sequence_reshaped = np.reshape(current_sequence, (1, window_size, 1))
-#         next_pred_scaled = model.predict(current_sequence_reshaped, verbose=0)
-#         predictions.append(next_pred_scaled[0, 0])
-#         # Append the prediction and slide the window
-#         current_sequence = np.append(current_sequence[1:], [[next_pred_scaled[0, 0]]], axis=0)
-    
-#     # Inverse transform the scaled predictions back to original prices
-#     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
-#     return predictions
-
-
-
+@st.cache_data
 def get_stock_news(ticker):
     """Get latest news about the stock"""
     try:

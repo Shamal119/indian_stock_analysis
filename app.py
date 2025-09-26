@@ -85,5 +85,5 @@ else:
         # Historical Data Table
         st.subheader("Historical Data")
         st.dataframe(df.sort_index(ascending=False).head())
-        else:
-            st.error("Error fetching data. Please check the stock symbol.")
+    else:
+        st.error("Error fetching data. Please check the stock symbol.")
